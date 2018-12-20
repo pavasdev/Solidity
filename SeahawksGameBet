@@ -9,16 +9,12 @@ contract SeahawksGameBet {
     
     address[2] public participants; 
     
-    struct Player {  // !! This doesn't need to be a struct if it there is just one item. vote could have been the 2nd half of the participantData mapping below.
-        bool vote;      // true = win, false = lose
-    }
+    mapping (address => bool) public participantData;
     
-    mapping (address => Player) public participantData;
-    
-    event OwnerAdded(uint x);  // !! Look into event indexing and understand that a little, if you don't already. Most people index many event params (up to 3 per event)
-    event ParticipantAdded(uint x);
-    event OwnerBackOut();
-    event PrizeDistributed(uint x);
+    event OwnerAdded(address add, uint256 amount);
+    event ParticipantAdded(address add, uint256 amount);
+    event OwnerBackOut(address add, uint256 amount);
+    event PrizeDistributed(address winner, uint amount);
     
     // Constructor, takes in number of participants in bet
     function initBet(bool gamePrediction) public payable {
@@ -29,7 +25,7 @@ contract SeahawksGameBet {
         ownerPrediction = gamePrediction;
         addParticipant(msg.sender, gamePrediction);
         
-        emit OwnerAdded(betAmount);
+        emit OwnerAdded(msg.sender, betAmount);
     }
 
     function joinBet() public payable {
@@ -39,9 +35,9 @@ contract SeahawksGameBet {
         require(!participantExists(msg.sender));
         // check if meets bet amount
         require(msg.value == betAmount);
-        addParticipant(msg.sender, !ownerPrediction);
+        addParticipant(msg.sender, !participantData[0]);
         
-        emit ParticipantAdded(msg.value);
+        emit ParticipantAdded(msg.sender, msg.value);
     }
 
     // Checks if participant exits
@@ -56,7 +52,7 @@ contract SeahawksGameBet {
     
     function addParticipant(address adr, bool _winOrLose) private {
         // set participant info
-        participantData[adr].vote = _winOrLose;  // !! If vote was the second half of the mapping (rather than the struct), this would just be participandData[adr] = _winOrLose
+        participantData[adr] = _winOrLose;
         // add participant address to array
         participants[numberOfBets] = adr;
         // increment numberOfBets
@@ -65,30 +61,40 @@ contract SeahawksGameBet {
     
     // Allow the first person to withdraw their funds if the second person has not yet deposited his bet
     function backOut() public  {
-        if(numberOfBets < 2) {
-            address temp = participants[0];  // !! Why not do these two lines in a single line?
-            temp.transfer(betAmount);
-        }
+        require(numberOfBets == 1);
+        address temp = participants[0];
         
-        emit OwnerBackOut();
+        delete participants[0];
+        numberOfBets = 0;
+        temp.transfer(betAmount);
+        betAmount = 0;
+        
+        emit OwnerBackOut(msg.sender, betAmount);
     }
     
     // Transfer prize to winner.
     function distributePrize(bool gameResult) public {
-        if (numberOfBets == 2) {  // !! Usually you would start with require(numberOfBets == 2); same outcome, though 
-            if (participantData[participants[0]].vote == gameResult) {
-                //transfer money to participant[0]
-                participants[0].transfer(betAmount*2); // !! Let's talk about overflow/underflow on the phone
-            } else {
-                participants[1].transfer(betAmount*2);
-            }
-            
-            emit PrizeDistributed (betAmount * 2);
-            
-            delete participants[0];
-            delete participants[1];
-            numberOfBets = 0;
-            betAmount = 0;
+        require(numberOfBets == totalParticipants);
+        
+        address temp;
+        if (participantData[participants[0]] == gameResult) {
+            //transfer money to participant[0]
+            temp = participants[0];
+        } else {
+            temp = participants[1];
         }
+        
+        // winner cannot distribute prize
+        //require(msg.sender != temp); 
+        
+        delete participants[0];
+        delete participants[1];
+        numberOfBets = 0;
+        
+        // send out ether
+        emit PrizeDistributed (temp, betAmount.mul(2));
+        temp.transfer(betAmount.mul(2));
+        
+        betAmount = 0;
     }
 }
