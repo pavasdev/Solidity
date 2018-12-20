@@ -1,0 +1,94 @@
+pragma solidity >=0.4.22 <0.6.0;
+contract SeahawksGameBet {
+
+    address public owner;
+    uint public betAmount;  // !! Convention is to just use uint256 for everything. uint == uint256, but people like to be explicit
+    uint public numberOfBets;
+    uint public totalParticipants;
+    bool public ownerPrediction;
+    
+    address[2] public participants; 
+    
+    struct Player {  // !! This doesn't need to be a struct if it there is just one item. vote could have been the 2nd half of the participantData mapping below.
+        bool vote;      // true = win, false = lose
+    }
+    
+    mapping (address => Player) public participantData;
+    
+    event OwnerAdded(uint x);  // !! Look into event indexing and understand that a little, if you don't already. Most people index many event params (up to 3 per event)
+    event ParticipantAdded(uint x);
+    event OwnerBackOut();
+    event PrizeDistributed(uint x);
+    
+    // Constructor, takes in number of participants in bet
+    function initBet(bool gamePrediction) public payable {
+        owner = msg.sender;
+        betAmount = msg.value;
+        numberOfBets = 0;
+        totalParticipants = 2;
+        ownerPrediction = gamePrediction;
+        addParticipant(msg.sender, gamePrediction);
+        
+        emit OwnerAdded(betAmount);
+    }
+
+    function joinBet() public payable {
+        // checks if owner has joined
+        require(numberOfBets == 1);
+        // check if player exists
+        require(!participantExists(msg.sender));
+        // check if meets bet amount
+        require(msg.value == betAmount);
+        addParticipant(msg.sender, !ownerPrediction);
+        
+        emit ParticipantAdded(msg.value);
+    }
+
+    // Checks if participant exits
+    function participantExists(address participantToCheck) public view returns(bool) {
+        for (uint i = 0; i < totalParticipants; i++) { 
+            if (participants[i] == participantToCheck) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    function addParticipant(address adr, bool _winOrLose) private {
+        // set participant info
+        participantData[adr].vote = _winOrLose;  // !! If vote was the second half of the mapping (rather than the struct), this would just be participandData[adr] = _winOrLose
+        // add participant address to array
+        participants[numberOfBets] = adr;
+        // increment numberOfBets
+        numberOfBets++;
+    }
+    
+    // Allow the first person to withdraw their funds if the second person has not yet deposited his bet
+    function backOut() public  {
+        if(numberOfBets < 2) {
+            address temp = participants[0];  // !! Why not do these two lines in a single line?
+            temp.transfer(betAmount);
+        }
+        
+        emit OwnerBackOut();
+    }
+    
+    // Transfer prize to winner.
+    function distributePrize(bool gameResult) public {
+        if (numberOfBets == 2) {  // !! Usually you would start with require(numberOfBets == 2); same outcome, though 
+            if (participantData[participants[0]].vote == gameResult) {
+                //transfer money to participant[0]
+                participants[0].transfer(betAmount*2); // !! Let's talk about overflow/underflow on the phone
+            } else {
+                participants[1].transfer(betAmount*2);
+            }
+            
+            emit PrizeDistributed (betAmount * 2);
+            
+            delete participants[0];
+            delete participants[1];
+            numberOfBets = 0;
+            betAmount = 0;
+        }
+    }
+}
