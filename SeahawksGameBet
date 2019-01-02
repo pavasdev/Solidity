@@ -1,11 +1,14 @@
 pragma solidity >=0.4.22 <0.6.0;
+import "github.com/OpenZeppelin/zeppelin-solidity/contracts/math/SafeMath.sol";
+
 contract SeahawksGameBet {
 
+    using SafeMath for uint256;
+    
     address public owner;
-    uint256 public betAmount;  // !! Convention is to just use uint256 for everything. uint == uint256, but people like to be explicit
+    uint256 public betAmount;
     uint256 public numberOfBets;
     uint256 public totalParticipants;
-    bool public ownerPrediction;
     
     address[2] public participants; 
     
